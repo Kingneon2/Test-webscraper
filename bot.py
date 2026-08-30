@@ -7,7 +7,6 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from playwright.async_api import async_playwright
 
 # --- Set Playwright browser path for Render ---
-# This ensures Playwright looks in the right place for Chromium
 PLAYWRIGHT_BROWSERS_PATH = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/opt/render/project/.cache/playwright")
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = PLAYWRIGHT_BROWSERS_PATH
 
@@ -26,8 +25,14 @@ if not TELEGRAM_TOKEN:
 # --- Bot Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
+        "🤖 Web Scraper Bot\n\n"
         "Send /scrape followed by a URL\n"
-        "Example: /scrape https://example.com"
+        "Example: /scrape https://example.com\n\n"
+        "I'll return:\n"
+        "• Page title\n"
+        "• Meta description\n"
+        "• First 5 links\n"
+        "• First 3 images"
     )
 
 async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -39,7 +44,7 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not url.startswith("http://") and not url.startswith("https://"):
         url = "https://" + url
 
-    await update.message.reply_text(f"Scraping {url}...")
+    await update.message.reply_text(f"🔍 Scraping {url}...")
 
     try:
         async with async_playwright() as p:
@@ -49,12 +54,56 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             page = await browser.new_page()
             await page.goto(url, timeout=30000)
+
+            # --- Extract data ---
             title = await page.title()
+            
+            # Meta description
+            description = await page.get_attribute('meta[name="description"]', 'content')
+            if not description:
+                description = "No description found"
+            
+            # Get first 5 links
+            links = await page.eval_on_selector_all(
+                'a[href]', 
+                'els => els.slice(0,5).map(el => el.href)'
+            )
+            
+            # Get first 3 images
+            images = await page.eval_on_selector_all(
+                'img[src]', 
+                'els => els.slice(0,3).map(el => el.src)'
+            )
+
             await browser.close()
-        await update.message.reply_text(f"Page title: {title}")
+
+            # --- Build response ---
+            response = f"📄 **Title:** {title}\n"
+            response += f"📝 **Description:** {description[:200]}...\n\n"
+            
+            response += f"🔗 **Links ({len(links)} found):**\n"
+            if links:
+                for i, link in enumerate(links, 1):
+                    response += f"{i}. {link[:80]}...\n" if len(link) > 80 else f"{i}. {link}\n"
+            else:
+                response += "No links found\n"
+            
+            response += f"\n🖼️ **Images ({len(images)} found):**\n"
+            if images:
+                for i, img in enumerate(images, 1):
+                    response += f"{i}. {img[:80]}...\n" if len(img) > 80 else f"{i}. {img}\n"
+            else:
+                response += "No images found\n"
+
+            # Truncate if too long for Telegram
+            if len(response) > 4000:
+                response = response[:4000] + "... (truncated)"
+
+            await update.message.reply_text(response)
+
     except Exception as e:
         error_msg = str(e)[:200]
-        await update.message.reply_text(f"Error: {error_msg}")
+        await update.message.reply_text(f"❌ Error: {error_msg}")
 
 # --- Main Function ---
 def main():
@@ -69,8 +118,8 @@ def main():
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("scrape", scrape))
 
-    print("Bot is running...")
-    bot_app.run_polling()
+    print("🤖 Bot is running...")
+    bot_app.run_polling(allowed_updates=[])
 
 if __name__ == "__main__":
     main()
