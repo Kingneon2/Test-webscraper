@@ -1,7 +1,6 @@
 import os
 import asyncio
-import threading
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from playwright.async_api import async_playwright
@@ -10,7 +9,7 @@ from playwright.async_api import async_playwright
 PLAYWRIGHT_BROWSERS_PATH = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/opt/render/project/.cache/playwright")
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = PLAYWRIGHT_BROWSERS_PATH
 
-# --- Flask app for health checks AND webhook ---
+# --- Flask app ---
 app = Flask(__name__)
 PORT = int(os.environ.get("PORT", 8000))
 
@@ -19,9 +18,10 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 if not TELEGRAM_TOKEN:
     raise ValueError("No TELEGRAM_BOT_TOKEN set in environment variables")
 
-# --- Create bot application globally ---
+# --- Create bot application ---
 bot_app = Application.builder().token(TELEGRAM_TOKEN).build()
 
+# --- Routes ---
 @app.route('/')
 def health():
     return "Bot is running!", 200
@@ -29,9 +29,13 @@ def health():
 @app.route('/webhook', methods=['POST'])
 async def webhook():
     """Handle incoming Telegram updates via webhook."""
-    update = Update.de_json(request.get_json(force=True), bot_app.bot)
-    await bot_app.process_update(update)
-    return "OK", 200
+    try:
+        data = request.get_json(force=True)
+        update = Update.de_json(data, bot_app.bot)
+        await bot_app.process_update(update)
+        return "OK", 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # --- Bot Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -125,10 +129,12 @@ def main():
     async def set_webhook():
         await bot_app.bot.delete_webhook(drop_pending_updates=True)
         await bot_app.bot.set_webhook(url=webhook_url)
+        print(f"Webhook set to: {webhook_url}")
     
     asyncio.run(set_webhook())
     
     # Start Flask server
+    print(f"Starting Flask server on port {PORT}...")
     app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
