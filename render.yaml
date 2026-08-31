@@ -10,4 +10,6 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: PLAYWRIGHT_BROWSERS_PATH
-        value: /tmp/playwright
+        value: /opt/render/project/.cache/playwright
+      - key: PYTHON_VERSION
+        value: 3.12.10
