@@ -1,31 +1,37 @@
 import os
 import asyncio
 import threading
-import nest_asyncio
-from flask import Flask
+from flask import Flask, request
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from playwright.async_api import async_playwright
-
-# --- Apply nest_asyncio to fix event loop issues ---
-nest_asyncio.apply()
 
 # --- Set Playwright browser path for Render ---
 PLAYWRIGHT_BROWSERS_PATH = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/opt/render/project/.cache/playwright")
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = PLAYWRIGHT_BROWSERS_PATH
 
-# --- Flask app for health checks ---
+# --- Flask app for health checks AND webhook ---
 app = Flask(__name__)
 PORT = int(os.environ.get("PORT", 8000))
-
-@app.route('/')
-def health():
-    return "Bot is running!", 200
 
 # --- Telegram Bot Setup ---
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 if not TELEGRAM_TOKEN:
     raise ValueError("No TELEGRAM_BOT_TOKEN set in environment variables")
+
+# --- Create bot application globally ---
+bot_app = Application.builder().token(TELEGRAM_TOKEN).build()
+
+@app.route('/')
+def health():
+    return "Bot is running!", 200
+
+@app.route('/webhook', methods=['POST'])
+async def webhook():
+    """Handle incoming Telegram updates via webhook."""
+    update = Update.de_json(request.get_json(force=True), bot_app.bot)
+    await bot_app.process_update(update)
+    return "OK", 200
 
 # --- Bot Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -60,7 +66,7 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             page = await browser.new_page()
 
-            # --- 60-second timeout (FIXED) ---
+            # --- 60-second timeout ---
             await page.goto(url, timeout=60000, wait_until='domcontentloaded')
 
             # --- Extract data ---
@@ -107,25 +113,23 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Error: {str(e)[:200]}")
 
+# --- Register handlers ---
+bot_app.add_handler(CommandHandler("start", start))
+bot_app.add_handler(CommandHandler("scrape", scrape))
+
 # --- Main Function ---
 def main():
-    # Start Flask server in a background thread
-    def run_flask():
-        app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
-
-    threading.Thread(target=run_flask, daemon=True).start()
-
-    # Start Telegram bot
-    bot_app = Application.builder().token(TELEGRAM_TOKEN).build()
-    bot_app.add_handler(CommandHandler("start", start))
-    bot_app.add_handler(CommandHandler("scrape", scrape))
-
-    # --- FIX: Force webhook deletion and start polling ---
-    async def start_bot():
+    # Set webhook
+    webhook_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'test-webscraper-ok3c.onrender.com')}/webhook"
+    
+    async def set_webhook():
         await bot_app.bot.delete_webhook(drop_pending_updates=True)
-        await bot_app.run_polling(allowed_updates=[], drop_pending_updates=True)
-
-    asyncio.run(start_bot())
+        await bot_app.bot.set_webhook(url=webhook_url)
+    
+    asyncio.run(set_webhook())
+    
+    # Start Flask server
+    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
     main()
