@@ -1,10 +1,14 @@
 import os
 import asyncio
 import threading
+import nest_asyncio
 from flask import Flask
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from playwright.async_api import async_playwright
+
+# --- Apply nest_asyncio to fix event loop issues ---
+nest_asyncio.apply()
 
 # --- Set Playwright browser path for Render ---
 PLAYWRIGHT_BROWSERS_PATH = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/opt/render/project/.cache/playwright")
@@ -103,7 +107,7 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Error: {str(e)[:200]}")
 
-# --- Main Function (FIXED) ---
+# --- Main Function ---
 def main():
     # Start Flask server in a background thread
     def run_flask():
@@ -116,10 +120,12 @@ def main():
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("scrape", scrape))
 
-    # --- FIX: Use get_event_loop() instead of asyncio.run() ---
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(bot_app.bot.delete_webhook(drop_pending_updates=True))
-    loop.run_until_complete(bot_app.run_polling(allowed_updates=[], drop_pending_updates=True))
+    # --- FIX: Force webhook deletion and start polling ---
+    async def start_bot():
+        await bot_app.bot.delete_webhook(drop_pending_updates=True)
+        await bot_app.run_polling(allowed_updates=[], drop_pending_updates=True)
+
+    asyncio.run(start_bot())
 
 if __name__ == "__main__":
     main()
