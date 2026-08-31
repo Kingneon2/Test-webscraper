@@ -102,7 +102,7 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Error: {str(e)[:200]}")
 
-# --- Main Function ---
+# --- Main Function (FIXED) ---
 def main():
     # Start Flask server in a background thread
     def run_flask():
@@ -115,12 +115,10 @@ def main():
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("scrape", scrape))
 
-    # --- FIX: Proper asyncio handling ---
-    async def start_bot():
-        await bot_app.bot.delete_webhook(drop_pending_updates=True)
-        await bot_app.run_polling(allowed_updates=[], drop_pending_updates=True)
-
-    asyncio.run(start_bot())
+    # --- FIX: Use get_event_loop() instead of asyncio.run() ---
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(bot_app.bot.delete_webhook(drop_pending_updates=True))
+    loop.run_until_complete(bot_app.run_polling(allowed_updates=[], drop_pending_updates=True))
 
 if __name__ == "__main__":
     main()
