@@ -12,6 +12,7 @@ os.environ["PLAYWRIGHT_BROWSERS_PATH"] = PLAYWRIGHT_BROWSERS_PATH
 
 # --- Flask app for health checks ---
 app = Flask(__name__)
+PORT = int(os.environ.get("PORT", 8000))
 
 @app.route('/')
 def health():
@@ -106,7 +107,7 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     # Start Flask server in a background thread
     def run_flask():
-        app.run(host='0.0.0.0', port=8000, debug=False, use_reloader=False)
+        app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
 
     threading.Thread(target=run_flask, daemon=True).start()
 
