@@ -70,12 +70,18 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             page = await browser.new_page()
 
-            # --- 60-second timeout ---
+            # --- 60-second timeout (FIXED) ---
             await page.goto(url, timeout=60000, wait_until='domcontentloaded')
 
             # --- Extract data ---
             title = await page.title()
-            description = await page.get_attribute('meta[name="description"]', 'content') or "No description found"
+
+            # --- FIX: query_selector instead of get_attribute (no timeout) ---
+            desc_el = await page.query_selector('meta[name="description"]')
+            if desc_el:
+                description = await desc_el.get_attribute('content') or "No description found"
+            else:
+                description = "No description found"
 
             links = await page.eval_on_selector_all(
                 'a[href]',
@@ -123,18 +129,19 @@ bot_app.add_handler(CommandHandler("scrape", scrape))
 
 # --- Main Function ---
 def main():
-    # Set webhook
-    webhook_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'test-webscraper-ok3c.onrender.com')}/webhook"
-    
+    # --- FIX: Use the CORRECT Render URL ---
+    hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'test-webscraper-vujx.onrender.com')
+    webhook_url = f"https://{hostname}/webhook"
+
     async def set_webhook():
         await bot_app.bot.delete_webhook(drop_pending_updates=True)
         await bot_app.bot.set_webhook(url=webhook_url)
-        print(f"Webhook set to: {webhook_url}")
-    
+        print(f"✅ Webhook set to: {webhook_url}")
+
     asyncio.run(set_webhook())
-    
+
     # Start Flask server
-    print(f"Starting Flask server on port {PORT}...")
+    print(f"🚀 Starting Flask server on port {PORT}...")
     app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
