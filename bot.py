@@ -25,14 +25,15 @@ if not TELEGRAM_TOKEN:
 # --- Bot Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 Web Scraper Bot\n\n"
+        "🤖 **Web Scraper Bot**\n\n"
         "Send /scrape followed by a URL\n"
-        "Example: /scrape https://example.com\n\n"
+        "Example: `/scrape https://example.com`\n\n"
         "I'll return:\n"
         "• Page title\n"
         "• Meta description\n"
         "• First 5 links\n"
-        "• First 3 images"
+        "• First 3 images\n\n"
+        "⚠️ Large or slow sites may take up to 60 seconds."
     )
 
 async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -44,7 +45,7 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not url.startswith("http://") and not url.startswith("https://"):
         url = "https://" + url
 
-    await update.message.reply_text(f"🔍 Scraping {url}...")
+    await update.message.reply_text(f"🔍 Scraping {url}... (this may take up to 60 seconds)")
 
     try:
         async with async_playwright() as p:
@@ -53,8 +54,14 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 args=['--no-sandbox', '--disable-setuid-sandbox']
             )
             page = await browser.new_page()
-            await page.goto(url, timeout=30000)
-
+            
+            # --- Navigate with longer timeout and wait for DOM content ---
+            await page.goto(
+                url, 
+                timeout=60000,  # 60 seconds
+                wait_until='domcontentloaded'  # Less strict than 'networkidle'
+            )
+            
             # --- Extract data ---
             title = await page.title()
             
@@ -84,18 +91,20 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
             response += f"🔗 **Links ({len(links)} found):**\n"
             if links:
                 for i, link in enumerate(links, 1):
-                    response += f"{i}. {link[:80]}...\n" if len(link) > 80 else f"{i}. {link}\n"
+                    display_link = link[:80] + "..." if len(link) > 80 else link
+                    response += f"{i}. {display_link}\n"
             else:
                 response += "No links found\n"
             
             response += f"\n🖼️ **Images ({len(images)} found):**\n"
             if images:
                 for i, img in enumerate(images, 1):
-                    response += f"{i}. {img[:80]}...\n" if len(img) > 80 else f"{i}. {img}\n"
+                    display_img = img[:80] + "..." if len(img) > 80 else img
+                    response += f"{i}. {display_img}\n"
             else:
                 response += "No images found\n"
 
-            # Truncate if too long for Telegram
+            # Truncate if too long for Telegram (4000 char limit)
             if len(response) > 4000:
                 response = response[:4000] + "... (truncated)"
 
