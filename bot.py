@@ -55,12 +55,8 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             page = await browser.new_page()
 
-            # --- 60-second timeout ---
-            await page.goto(
-                url,
-                timeout=60000,
-                wait_until='domcontentloaded'
-            )
+            # --- 60-second timeout (FIXED) ---
+            await page.goto(url, timeout=60000, wait_until='domcontentloaded')
 
             # --- Extract data ---
             title = await page.title()
@@ -104,8 +100,7 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(response)
 
     except Exception as e:
-        error_msg = str(e)[:200]
-        await update.message.reply_text(f"❌ Error: {error_msg}")
+        await update.message.reply_text(f"❌ Error: {str(e)[:200]}")
 
 # --- Main Function ---
 def main():
@@ -120,7 +115,7 @@ def main():
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("scrape", scrape))
 
-    # --- FIX: Proper asyncio handling for Python 3.12+ ---
+    # --- FIX: Proper asyncio handling ---
     async def start_bot():
         await bot_app.bot.delete_webhook(drop_pending_updates=True)
         await bot_app.run_polling(allowed_updates=[], drop_pending_updates=True)
