@@ -55,19 +55,16 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             page = await browser.new_page()
 
-            # --- THE FIX: 60-second timeout (was 30000) ---
+            # --- THE FIX: 60-second timeout ---
             await page.goto(
                 url,
-                timeout=60000,  # 60 seconds
+                timeout=60000,
                 wait_until='domcontentloaded'
             )
 
             # --- Extract data ---
             title = await page.title()
-
-            description = await page.get_attribute('meta[name="description"]', 'content')
-            if not description:
-                description = "No description found"
+            description = await page.get_attribute('meta[name="description"]', 'content') or "No description found"
 
             links = await page.eval_on_selector_all(
                 'a[href]',
@@ -123,8 +120,12 @@ def main():
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("scrape", scrape))
 
+    # --- FIX: Clear any old webhooks and drop pending updates ---
+    import asyncio
+    asyncio.run(bot_app.bot.delete_webhook(drop_pending_updates=True))
+
     print("🤖 Bot is running...")
-    bot_app.run_polling(allowed_updates=[])
+    bot_app.run_polling(allowed_updates=[], drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
