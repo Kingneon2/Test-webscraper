@@ -1,3 +1,4 @@
+cat > bot.py << 'EOF'
 import os
 import asyncio
 import threading
@@ -122,3 +123,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+EOF
