@@ -55,7 +55,7 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             page = await browser.new_page()
 
-            # --- THE FIX: 60-second timeout ---
+            # --- 60-second timeout ---
             await page.goto(
                 url,
                 timeout=60000,
@@ -120,12 +120,12 @@ def main():
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("scrape", scrape))
 
-    # --- FIX: Clear any old webhooks and drop pending updates ---
-    import asyncio
-    asyncio.run(bot_app.bot.delete_webhook(drop_pending_updates=True))
+    # --- FIX: Proper asyncio handling for Python 3.12+ ---
+    async def start_bot():
+        await bot_app.bot.delete_webhook(drop_pending_updates=True)
+        await bot_app.run_polling(allowed_updates=[], drop_pending_updates=True)
 
-    print("🤖 Bot is running...")
-    bot_app.run_polling(allowed_updates=[], drop_pending_updates=True)
+    asyncio.run(start_bot())
 
 if __name__ == "__main__":
     main()
