@@ -54,31 +54,28 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 args=['--no-sandbox', '--disable-setuid-sandbox']
             )
             page = await browser.new_page()
-            
-            # --- Navigate with longer timeout and wait for DOM content ---
+
+            # --- THE FIX: 60-second timeout (was 30000) ---
             await page.goto(
-                url, 
+                url,
                 timeout=60000,  # 60 seconds
-                wait_until='domcontentloaded'  # Less strict than 'networkidle'
+                wait_until='domcontentloaded'
             )
-            
+
             # --- Extract data ---
             title = await page.title()
-            
-            # Meta description
+
             description = await page.get_attribute('meta[name="description"]', 'content')
             if not description:
                 description = "No description found"
-            
-            # Get first 5 links
+
             links = await page.eval_on_selector_all(
-                'a[href]', 
+                'a[href]',
                 'els => els.slice(0,5).map(el => el.href)'
             )
-            
-            # Get first 3 images
+
             images = await page.eval_on_selector_all(
-                'img[src]', 
+                'img[src]',
                 'els => els.slice(0,3).map(el => el.src)'
             )
 
@@ -87,7 +84,7 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # --- Build response ---
             response = f"📄 **Title:** {title}\n"
             response += f"📝 **Description:** {description[:200]}...\n\n"
-            
+
             response += f"🔗 **Links ({len(links)} found):**\n"
             if links:
                 for i, link in enumerate(links, 1):
@@ -95,7 +92,7 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     response += f"{i}. {display_link}\n"
             else:
                 response += "No links found\n"
-            
+
             response += f"\n🖼️ **Images ({len(images)} found):**\n"
             if images:
                 for i, img in enumerate(images, 1):
@@ -104,7 +101,6 @@ async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 response += "No images found\n"
 
-            # Truncate if too long for Telegram (4000 char limit)
             if len(response) > 4000:
                 response = response[:4000] + "... (truncated)"
 
